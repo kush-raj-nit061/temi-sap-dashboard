@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Temi Dashboard</title>
+
+    <style>
+        body {
+            font-family: Arial;
+            background: #f4f6f9;
+            padding: 20px;
+        }
+
+        h2 { margin-bottom: 10px; }
+
+        .container {
+            display: flex;
+            flex-wrap: wrap;
+        }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 15px;
+            margin: 10px;
+            width: 260px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            transition: 0.2s;
+        }
+
+        .card:hover {
+            transform: scale(1.05);
+        }
+
+        .clickable {
+            cursor: pointer;
+            border: 2px solid green;
+        }
+
+        .auto {
+            border: 2px solid orange;
+            opacity: 0.8;
+        }
+
+        .status {
+            font-weight: bold;
+            padding: 5px 10px;
+            border-radius: 8px;
+            display: inline-block;
+            margin-top: 10px;
+        }
+
+        .ready { background: orange; color: white; }
+        .moving { background: blue; color: white; }
+        .completed { background: green; color: white; }
+        .failed { background: red; color: white; }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="header">
+    <h2>🚀 Temi Dashboard (Hybrid Mode)</h2>
+    <button onclick="loadTasks()">Refresh</button>
+</div>
+
+<div class="container" id="tasks"></div>
+
+<script>
+
+const TEMI_IP = "10.66.115.61";
+
+// local UI state
+let taskStatusMap = {};
+
+// 🚀 Load tasks
+function loadTasks() {
+
+    fetch("https://warehouse-dashboard-srv.cfapps.eu10-004.hana.ondemand.com/odata/v4/warehouse/FulfillmentOrders")
+        .then(res => res.json())
+        .then(data => {
+
+            const container = document.getElementById("tasks");
+            container.innerHTML = "";
+
+            // 🔥 SORT BY PRIORITY (5 → 1)
+            data.value.sort((a, b) => {
+                return (b.agentFlag || 0) - (a.agentFlag || 0);
+            });
+
+            data.value.forEach(task => {
+
+                const id = task.ID;
+                const bin = task.bin;
+                const flag = task.agentFlag;
+                const delivery = task.delivery;
+
+                const status = taskStatusMap[id] || task.status;
+
+                const card = document.createElement("div");
+                card.className = "card";
+
+                // 🎯 AUTO vs MANUAL
+                if (flag) {
+                    card.classList.add("auto");
+                } else {
+                    card.classList.add("clickable");
+                }
+
+                // 🎨 Active task highlight
+                if (status === "MOVING") {
+                    card.style.border = "3px solid blue";
+                }
+
+                card.innerHTML = `
+                    <b>ID:</b> ${id}<br>
+                    <b>Bin:</b> ${bin}<br>
+                    <b>Priority:</b> ${flag || "Manual"}<br>
+                    <b>Delivery:</b> ${delivery || "N/A"}<br>
+                    <div class="status ${getClass(status)}">${status}</div>
+                `;
+
+                // 🚀 MANUAL CONTROL ONLY IF NO agentFlag
+                if (!flag) {
+                    card.onclick = () => move(bin, id);
+                } else {
+                    card.onclick = () => {
+                        alert("🤖 Auto-controlled by Temi");
+                    };
+                }
+
+                container.appendChild(card);
+            });
+        });
+}
+
+// 🎯 Move Temi (Manual only)
+function move(bin, id) {
+
+    taskStatusMap[id] = "MOVING";
+    loadTasks();
+
+    fetch(`http://${TEMI_IP}:8080/move?bin=${bin}&id=${id}`)
+        .then(res => res.text())
+        .then(() => {
+
+            console.log("Command sent");
+
+        })
+        .catch(err => alert(err));
+}
+
+// 🎨 Status color
+function getClass(status) {
+    status = status.toLowerCase();
+
+    if (status.includes("ready")) return "ready";
+    if (status.includes("moving")) return "moving";
+    if (status.includes("complete")) return "completed";
+    return "failed";
+}
+
+// 🔄 Auto refresh
+setInterval(loadTasks, 5000);
+
+// initial load
+loadTasks();
+
+</script>
+
+</body>
+</html>
