@@ -1,176 +1,474 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="UTF-8">
     <title>Temi Dashboard</title>
-
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Mono:wght@400;500&display=swap" rel="stylesheet">
     <style>
-        body {
-            font-family: Arial;
-            background: #f4f6f9;
-            padding: 20px;
+        :root {
+            --bg:#0e1117;--surface:#161b27;--surface2:#1e2535;--border:#2a3347;
+            --text:#e8edf5;--text-muted:#6b7a99;
+            --green:#22c55e;--green-dim:rgba(34,197,94,0.12);
+            --orange:#f97316;--orange-dim:rgba(249,115,22,0.12);
+            --blue:#3b82f6;--blue-dim:rgba(59,130,246,0.12);
+            --red:#ef4444;--red-dim:rgba(239,68,68,0.1);
+            --yellow:#eab308;--yellow-dim:rgba(234,179,8,0.12);
+            --purple:#a855f7;--purple-dim:rgba(168,85,247,0.12);
+            --active-glow:rgba(59,130,246,0.25);
+            --font: Arial, 'Helvetica Neue', Helvetica, sans-serif;
         }
+        *{box-sizing:border-box;margin:0;padding:0;}
+        body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100vh;padding:28px 32px;}
+        .header{display:flex;align-items:center;justify-content:space-between;margin-bottom:32px;padding-bottom:20px;border-bottom:1px solid var(--border);}
+        .header-left{display:flex;align-items:center;gap:14px;}
+        .logo-dot{width:10px;height:10px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);animation:pulse 2s infinite;}
+        @keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.4;}}
+        .header h1{font-size:20px;font-weight:700;letter-spacing:-0.3px;}
+        .header h1 span{color:var(--text-muted);font-weight:400;}
+        .header-right{display:flex;align-items:center;gap:16px;}
+        .last-updated{font-family:'Fira Mono',monospace;font-size:11px;color:var(--text-muted);}
+        .refresh-btn{background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:var(--font);font-size:13px;font-weight:500;padding:8px 16px;border-radius:8px;cursor:pointer;transition:all 0.15s;}
+        .refresh-btn:hover{background:var(--surface);border-color:var(--blue);color:var(--blue);}
+        .stats{display:flex;gap:12px;margin-bottom:28px;}
+        .stat{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 20px;display:flex;flex-direction:column;gap:2px;}
+        .stat-val{font-size:22px;font-weight:700;font-family:'Fira Mono',monospace;}
+        .stat-label{font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;}
+        .section-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);display:flex;align-items:center;gap:8px;margin:24px 0 12px;}
+        .section-label::after{content:'';flex:1;height:1px;background:var(--border);}
+        .section-dot{width:6px;height:6px;border-radius:50%;}
+        .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;}
 
-        h2 { margin-bottom: 10px; }
+        .card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:18px 20px;transition:transform 0.15s,box-shadow 0.15s,border-color 0.3s;position:relative;overflow:hidden;cursor:default;}
+        .card:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,0.3);}
 
-        .container {
-            display: flex;
-            flex-wrap: wrap;
-        }
+        /* active-only (not bin-empty) */
+        .card.active:not(.bin-empty){border-color:var(--blue);background:linear-gradient(135deg,var(--surface) 0%,rgba(59,130,246,0.07) 100%);box-shadow:0 0 0 1px var(--blue),0 8px 32px var(--active-glow);}
+        .card.active:not(.bin-empty)::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--blue),#818cf8);}
 
-        .card {
-            background: white;
-            border-radius: 12px;
-            padding: 15px;
-            margin: 10px;
-            width: 260px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-            transition: 0.2s;
-        }
+        /* bin-empty (with or without active) — yellow always wins */
+        .card.bin-empty{border-color:var(--yellow);background:linear-gradient(135deg,var(--surface) 0%,rgba(234,179,8,0.06) 100%);cursor:pointer;}
+        .card.bin-empty::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--yellow),#f59e0b);}
+        .card.bin-empty:hover{box-shadow:0 8px 24px rgba(234,179,8,0.18);}
+        .card.bin-empty.expanded{border-radius:14px 14px 0 0;transform:none;box-shadow:none;}
 
-        .card:hover {
-            transform: scale(1.05);
-        }
+        .card.completed{opacity:0.5;border-color:transparent;}
+        .card.completed:hover{opacity:0.7;}
+        .card.status-changed{animation:flash 0.6s ease;}
+        @keyframes flash{0%{box-shadow:0 0 0 2px var(--blue);}100%{box-shadow:none;}}
 
-        .clickable {
-            cursor: pointer;
-            border: 2px solid green;
-        }
+        /* badges — stacked top-right; bin-empty badge sits above active badge */
+        .badge-stack{position:absolute;top:14px;right:14px;display:flex;flex-direction:column;align-items:flex-end;gap:5px;}
+        .active-badge{background:var(--blue);color:white;font-size:10px;font-weight:700;letter-spacing:0.5px;padding:3px 8px;border-radius:20px;text-transform:uppercase;display:flex;align-items:center;gap:5px;}
+        .active-badge::before{content:'';width:5px;height:5px;border-radius:50%;background:white;animation:pulse 1.2s infinite;}
+        .tap-badge{background:var(--yellow-dim);color:var(--yellow);font-size:10px;font-weight:700;letter-spacing:0.3px;padding:3px 8px;border-radius:20px;border:1px solid rgba(234,179,8,0.3);}
 
-        .auto {
-            border: 2px solid orange;
-            opacity: 0.8;
-        }
+        .card-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px;padding-right:90px;}
+        .order-id{font-family:'Fira Mono',monospace;font-size:13px;font-weight:500;color:var(--text-muted);}
+        .fields{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+        .field{display:flex;flex-direction:column;gap:3px;}
+        .field-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--text-muted);}
+        .field-value{font-size:15px;font-weight:700;color:var(--text);font-family:'Fira Mono',monospace;}
+        .chip{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;padding:4px 10px;border-radius:20px;text-transform:uppercase;letter-spacing:0.3px;margin-top:14px;}
+        .chip-dot{width:5px;height:5px;border-radius:50%;}
+        .chip.robot-assigned{background:var(--blue-dim);color:var(--blue);}
+        .chip.ready{background:var(--orange-dim);color:var(--orange);}
+        .chip.bin-empty-chip{background:var(--yellow-dim);color:var(--yellow);}
+        .chip.complete{background:var(--green-dim);color:var(--green);}
+        .chip.failed{background:var(--red-dim);color:var(--red);}
+        .chip.ai-resolving{background:var(--purple-dim);color:var(--purple);}
+        .chip.other{background:var(--surface2);color:var(--text-muted);}
 
-        .status {
-            font-weight: bold;
-            padding: 5px 10px;
-            border-radius: 8px;
-            display: inline-block;
-            margin-top: 10px;
-        }
+        .action-panel{background:var(--surface2);border:1px solid var(--yellow);border-top:none;border-radius:0 0 14px 14px;padding:16px 20px;display:none;animation:slideDown 0.2s ease;}
+        .action-panel.open{display:block;}
+        @keyframes slideDown{from{opacity:0;transform:translateY(-6px);}to{opacity:1;transform:translateY(0);}}
+        .action-panel-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--yellow);margin-bottom:12px;}
+        .demo-badge{font-size:9px;background:rgba(255,255,255,0.08);color:var(--text-muted);padding:2px 6px;border-radius:4px;margin-left:6px;vertical-align:middle;}
+        .action-buttons{display:flex;flex-direction:column;gap:8px;}
+        .action-btn{width:100%;padding:11px 16px;border-radius:8px;border:1px solid;font-family:var(--font);font-size:13px;font-weight:700;cursor:pointer;text-align:left;display:flex;align-items:center;gap:10px;transition:all 0.15s;}
+        .action-btn-icon{width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;}
+        .action-btn-content{display:flex;flex-direction:column;gap:2px;}
+        .action-btn-label{font-size:13px;font-weight:700;}
+        .action-btn-desc{font-size:11px;font-weight:400;opacity:0.75;}
+        .btn-async{background:rgba(168,85,247,0.1);border-color:rgba(168,85,247,0.35);color:var(--purple);}
+        .btn-async:hover{background:rgba(168,85,247,0.18);border-color:var(--purple);}
+        .btn-async .action-btn-icon{background:rgba(168,85,247,0.15);}
+        .btn-sync{background:rgba(249,115,22,0.08);border-color:rgba(249,115,22,0.3);color:var(--orange);}
+        .btn-sync:hover{background:rgba(249,115,22,0.15);border-color:var(--orange);}
+        .btn-sync .action-btn-icon{background:rgba(249,115,22,0.12);}
+        .action-panel-close{margin-top:10px;width:100%;padding:7px;background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--text-muted);font-family:var(--font);font-size:11px;cursor:pointer;}
+        .action-panel-close:hover{border-color:var(--text-muted);}
 
-        .ready { background: orange; color: white; }
-        .moving { background: blue; color: white; }
-        .completed { background: green; color: white; }
-        .failed { background: red; color: white; }
+        .toast{position:fixed;bottom:28px;right:32px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:12px 18px;font-size:13px;color:var(--text);display:none;z-index:999;animation:toastIn 0.2s ease;}
+        .toast.show{display:block;}
+        @keyframes toastIn{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);}}
 
-        .header {
-            display: flex;
-            justify-content: space-between;
-        }
+        .empty{grid-column:1/-1;text-align:center;color:var(--text-muted);font-size:14px;padding:40px;}
+        .countdown{font-family:'Fira Mono',monospace;font-size:11px;color:var(--text-muted);opacity:0.6;}
     </style>
 </head>
-
 <body>
-
 <div class="header">
-    <h2>🚀 Temi Dashboard (Hybrid Mode)</h2>
-    <button onclick="loadTasks()">Refresh</button>
+    <div class="header-left">
+        <div class="logo-dot"></div>
+        <h1>Temi Dashboard <span>/ Live Orders</span></h1>
+    </div>
+    <div class="header-right">
+        <span class="countdown" id="countdown"></span>
+        <span class="last-updated" id="lastUpdated">—</span>
+        <button class="refresh-btn" onclick="fetchAndDiff()">↻ Refresh</button>
+    </div>
 </div>
 
-<div class="container" id="tasks"></div>
+<div class="stats">
+    <div class="stat"><span class="stat-val" id="statActive" style="color:var(--blue)">—</span><span class="stat-label">Active</span></div>
+    <div class="stat"><span class="stat-val" id="statReady" style="color:var(--orange)">—</span><span class="stat-label">Ready</span></div>
+    <div class="stat"><span class="stat-val" id="statEmpty" style="color:var(--yellow)">—</span><span class="stat-label">Bin Empty</span></div>
+    <div class="stat"><span class="stat-val" id="statDone" style="color:var(--green)">—</span><span class="stat-label">Complete</span></div>
+    <div class="stat"><span class="stat-val" id="statTotal" style="color:var(--text-muted)">—</span><span class="stat-label">Total</span></div>
+</div>
+
+<div id="root"></div>
+<div class="toast" id="toast"><span id="toastMsg"></span></div>
 
 <script>
+const API = "https://warehouse-dashboard-srv.cfapps.eu10-004.hana.ondemand.com/odata/v4/warehouse/FulfillmentOrders";
+const POLL_INTERVAL = 5000;
+let prevTaskMap = {};
+let countdownTimer, pollTimer, secondsLeft;
+let expandedCardId = null;
 
-const TEMI_IP = "10.66.115.61";
+function statusGroup(s) {
+    if (!s) return 3;
+    const l = s.toLowerCase();
+    if (l.includes("robot assign"))   return 0;
+    if (l.includes("ready for pick")) return 1;
+    if (l.includes("bin empty"))      return 2;
+    if (l.includes("pick complete"))  return 4;
+    return 3;
+}
+function chipClass(s) {
+    if (!s) return "other";
+    const l = s.toLowerCase();
+    if (l.includes("robot assign"))   return "robot-assigned";
+    if (l.includes("ready for pick")) return "ready";
+    if (l.includes("bin empty"))      return "bin-empty-chip";
+    if (l.includes("pick complete"))  return "complete";
+    if (l.includes("ai resolv") || l.includes("resolving")) return "ai-resolving";
+    if (l.includes("fail"))           return "failed";
+    return "other";
+}
+function chipLabel(s) {
+    if (!s) return "Unknown";
+    const l = s.toLowerCase();
+    if (l.includes("robot assign"))   return "Robot Assigned";
+    if (l.includes("ready for pick")) return "Ready for Picking";
+    if (l.includes("bin empty"))      return "Bin Empty";
+    if (l.includes("pick complete"))  return "Complete";
+    if (l.includes("ai resolv") || l.includes("resolving")) return "AI Resolving";
+    return s;
+}
+function isActive(s)   { if(!s)return false; const l=s.toLowerCase(); return l.includes("robot assign")||l.includes("pick start")||l.includes("delivering"); }
+function isBinEmpty(s) { return s?.toLowerCase().includes("bin empty"); }
+function isComplete(s) { return s?.toLowerCase().includes("pick complete"); }
 
-// local UI state
-let taskStatusMap = {};
+function showToast(msg, color) {
+    const t = document.getElementById("toast");
+    document.getElementById("toastMsg").textContent = msg;
+    t.style.borderColor = color || "var(--border)";
+    t.classList.add("show");
+    setTimeout(() => t.classList.remove("show"), 3500);
+}
 
-// 🚀 Load tasks
-function loadTasks() {
+function sendSapStatus(taskId, status, orderFlag, onDone) {
+    const encoded = encodeURIComponent(taskId);
+    const url = API.replace("/FulfillmentOrders", "") + `/FulfillmentOrders(ID='${encoded}')`;
+    fetch(url, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status, orderFlag: orderFlag || "" })
+    })
+    .then(r => { if (onDone) onDone(r.ok); })
+    .catch(() => { if (onDone) onDone(false); });
+}
 
-    fetch("https://warehouse-dashboard-srv.cfapps.eu10-004.hana.ondemand.com/odata/v4/warehouse/FulfillmentOrders")
-        .then(res => res.json())
+function closeAllPanels() {
+    document.querySelectorAll(".action-panel.open").forEach(p => p.classList.remove("open"));
+    document.querySelectorAll(".card.expanded").forEach(c => c.classList.remove("expanded"));
+    expandedCardId = null;
+}
+
+function toggleActionPanel(cardEl, taskId) {
+    const panel = document.getElementById("panel-" + taskId);
+    if (!panel) return;
+    const isOpen = panel.classList.contains("open");
+    closeAllPanels();
+    if (!isOpen) {
+        panel.classList.add("open");
+        cardEl.classList.add("expanded");
+        expandedCardId = taskId;
+    }
+}
+
+function handleAiResolution(taskId) {
+    closeAllPanels();
+    sendSapStatus(taskId, "Bin Empty", "T", (ok) => {
+        showToast(ok ? "⏳ AI Resolution initiated — Temi entering resolve mode" : "⚠ SAP update failed", ok ? "var(--purple)" : "var(--red)");
+        fetchAndDiff();
+    });
+}
+
+function handleMoveToNext(taskId) {
+    closeAllPanels();
+    sendSapStatus(taskId, "Bin Empty", "", (ok) => {
+        showToast(ok ? "⏭ Temi will move to next order" : "⚠ SAP update failed", ok ? "var(--orange)" : "var(--red)");
+        fetchAndDiff();
+    });
+}
+
+function cardHTML(task) {
+    const binEmpty = isBinEmpty(task.status);
+    const active   = isActive(task.status);
+    const chip     = chipClass(task.status);
+    const label    = chipLabel(task.status);
+
+    // Badge stack: always show active badge if active; always show tap hint if bin-empty
+    const badgeStack = (active || binEmpty) ? `
+        <div class="badge-stack">
+            ${active   ? '<div class="active-badge">Current</div>' : ''}
+            ${binEmpty ? '<div class="tap-badge">Tap to act</div>' : ''}
+        </div>` : '';
+
+    return `
+        ${badgeStack}
+        <div class="card-header"><span class="order-id">#${task.ID || "—"}</span></div>
+        <div class="fields">
+            <div class="field"><span class="field-label">Product No</span><span class="field-value">${task.product || "—"}</span></div>
+            <div class="field"><span class="field-label">Bin</span><span class="field-value">${task.bin || "—"}</span></div>
+            <div class="field" style="grid-column:1/-1"><span class="field-label">Delivery</span><span class="field-value">${task.delivery || "—"}</span></div>
+        </div>
+        <div class="chip ${chip}"><span class="chip-dot" style="background:currentColor"></span>${label}</div>
+    `;
+}
+
+function actionPanelHTML(task) {
+    return `
+        <div class="action-panel" id="panel-${task.ID}">
+            <div class="action-panel-title">Resolve bin empty <span class="demo-badge">DEMO</span></div>
+            <div class="action-buttons">
+                <button class="action-btn btn-async" onclick="handleAiResolution('${task.ID}')">
+                    <div class="action-btn-icon">⏳</div>
+                    <div class="action-btn-content">
+                        <span class="action-btn-label">Initiate AI Resolution</span>
+                        <span class="action-btn-desc">Asynchronous — Temi waits for SAP restock signal</span>
+                    </div>
+                </button>
+                <button class="action-btn btn-sync" onclick="handleMoveToNext('${task.ID}')">
+                    <div class="action-btn-icon">⏭</div>
+                    <div class="action-btn-content">
+                        <span class="action-btn-label">Move to Next Order</span>
+                        <span class="action-btn-desc">Synchronous — skip this bin, pick up next task now</span>
+                    </div>
+                </button>
+            </div>
+            <button class="action-panel-close" onclick="closeAllPanels()">Dismiss</button>
+        </div>
+    `;
+}
+
+function applyCardClasses(el, task) {
+    el.classList.toggle("active",    isActive(task.status));
+    el.classList.toggle("bin-empty", isBinEmpty(task.status));
+    el.classList.toggle("completed", isComplete(task.status));
+}
+
+function attachCardHandler(card, task) {
+    if (isBinEmpty(task.status)) {
+        card.style.cursor = "pointer";
+        card.onclick = (e) => {
+            e.stopPropagation();
+            toggleActionPanel(card, task.ID);
+        };
+    } else {
+        card.style.cursor = "default";
+        card.onclick = null;
+    }
+}
+
+function buildDOM(sorted) {
+    const root = document.getElementById("root");
+    root.innerHTML = "";
+    prevTaskMap = {};
+
+    const sections = [
+        { label:"Active",         color:"var(--blue)",   filter: t => isActive(t.status) },
+        { label:"Ready for Pick", color:"var(--orange)", filter: t => !isActive(t.status) && !isBinEmpty(t.status) && !isComplete(t.status) && statusGroup(t.status) <= 3 },
+        { label:"Bin Empty",      color:"var(--yellow)", filter: t => isBinEmpty(t.status) },
+        { label:"Completed",      color:"var(--green)",  filter: t => isComplete(t.status) },
+    ];
+
+    sections.forEach(sec => {
+        const items = sorted.filter(sec.filter);
+        if (!items.length) return;
+
+        const labelEl = document.createElement("div");
+        labelEl.className = "section-label";
+        labelEl.dataset.section = sec.label;
+        labelEl.innerHTML = `<span class="section-dot" style="background:${sec.color}"></span>${sec.label} (<span class="sec-count">${items.length}</span>)`;
+        root.appendChild(labelEl);
+
+        const grid = document.createElement("div");
+        grid.className = "grid";
+        grid.dataset.section = sec.label;
+
+        items.forEach(task => {
+            const wrapper = document.createElement("div");
+
+            const card = document.createElement("div");
+            card.className = "card";
+            card.dataset.id = task.ID;
+            applyCardClasses(card, task);
+            card.innerHTML = cardHTML(task);
+            attachCardHandler(card, task);
+
+            wrapper.appendChild(card);
+
+            if (isBinEmpty(task.status)) {
+                const tmp = document.createElement("div");
+                tmp.innerHTML = actionPanelHTML(task);
+                wrapper.appendChild(tmp.firstElementChild);
+            }
+
+            grid.appendChild(wrapper);
+            prevTaskMap[task.ID] = task.status;
+        });
+
+        root.appendChild(grid);
+    });
+}
+
+function updateSectionCounts(sorted) {
+    const defs = [
+        { label:"Active",         filter: t => isActive(t.status) },
+        { label:"Ready for Pick", filter: t => !isActive(t.status) && !isBinEmpty(t.status) && !isComplete(t.status) && statusGroup(t.status) <= 3 },
+        { label:"Bin Empty",      filter: t => isBinEmpty(t.status) },
+        { label:"Completed",      filter: t => isComplete(t.status) },
+    ];
+    defs.forEach(sec => {
+        const el = document.querySelector(`.section-label[data-section="${sec.label}"] .sec-count`);
+        if (el) el.textContent = sorted.filter(sec.filter).length;
+    });
+}
+
+function diffAndUpdate(tasks) {
+    const sorted = [...tasks].sort((a, b) => {
+        const d = statusGroup(a.status) - statusGroup(b.status);
+        return d !== 0 ? d : (a.createdAt || "").localeCompare(b.createdAt || "");
+    });
+
+    const nextMap = {};
+    tasks.forEach(t => nextMap[t.ID] = t.status);
+
+    const added   = tasks.filter(t => !(t.ID in prevTaskMap));
+    const removed = Object.keys(prevTaskMap).filter(id => !(id in nextMap));
+    const changed = tasks.filter(t => t.ID in prevTaskMap && prevTaskMap[t.ID] !== t.status);
+
+    if (added.length > 0 || removed.length > 0) {
+        buildDOM(sorted);
+        prevTaskMap = nextMap;
+    } else {
+        changed.forEach(task => {
+            const card = document.querySelector(`.card[data-id="${task.ID}"]`);
+            if (!card) return;
+            const wrapper = card.parentElement;
+            const wasExpanded = expandedCardId === task.ID;
+
+            applyCardClasses(card, task);
+            card.innerHTML = cardHTML(task);
+            attachCardHandler(card, task);
+
+            const oldPanel = document.getElementById("panel-" + task.ID);
+            if (oldPanel) oldPanel.remove();
+
+            if (isBinEmpty(task.status)) {
+                const tmp = document.createElement("div");
+                tmp.innerHTML = actionPanelHTML(task);
+                wrapper.appendChild(tmp.firstElementChild);
+                if (wasExpanded) {
+                    document.getElementById("panel-" + task.ID)?.classList.add("open");
+                    card.classList.add("expanded");
+                    expandedCardId = task.ID;
+                }
+            }
+
+            card.classList.add("status-changed");
+            setTimeout(() => card.classList.remove("status-changed"), 700);
+        });
+        updateSectionCounts(sorted);
+        prevTaskMap = nextMap;
+    }
+
+    document.getElementById("statActive").textContent = tasks.filter(t => isActive(t.status)).length;
+    document.getElementById("statReady").textContent  = tasks.filter(t => t.status?.toLowerCase().includes("ready for pick")).length;
+    document.getElementById("statEmpty").textContent  = tasks.filter(t => isBinEmpty(t.status)).length;
+    document.getElementById("statDone").textContent   = tasks.filter(t => isComplete(t.status)).length;
+    document.getElementById("statTotal").textContent  = tasks.length;
+    document.getElementById("lastUpdated").textContent = "Updated " + new Date().toLocaleTimeString();
+}
+
+function fetchAndDiff() {
+    resetCountdown();
+    fetch(API)
+        .then(r => r.json())
         .then(data => {
-
-            const container = document.getElementById("tasks");
-            container.innerHTML = "";
-
-            // 🔥 SORT BY PRIORITY (5 → 1)
-            data.value.sort((a, b) => {
-                return (b.agentFlag || 0) - (a.agentFlag || 0);
-            });
-
-            data.value.forEach(task => {
-
-                const id = task.ID;
-                const bin = task.bin;
-                const flag = task.agentFlag;
-                const delivery = task.delivery;
-
-                const status = taskStatusMap[id] || task.status;
-
-                const card = document.createElement("div");
-                card.className = "card";
-
-                // 🎯 AUTO vs MANUAL
-                if (flag) {
-                    card.classList.add("auto");
-                } else {
-                    card.classList.add("clickable");
-                }
-
-                // 🎨 Active task highlight
-                if (status === "MOVING") {
-                    card.style.border = "3px solid blue";
-                }
-
-                card.innerHTML = `
-                    <b>ID:</b> ${id}<br>
-                    <b>Bin:</b> ${bin}<br>
-                    <b>Priority:</b> ${flag || "Manual"}<br>
-                    <b>Delivery:</b> ${delivery || "N/A"}<br>
-                    <div class="status ${getClass(status)}">${status}</div>
-                `;
-
-                // 🚀 MANUAL CONTROL ONLY IF NO agentFlag
-                if (!flag) {
-                    card.onclick = () => move(bin, id);
-                } else {
-                    card.onclick = () => {
-                        alert("🤖 Auto-controlled by Temi");
-                    };
-                }
-
-                container.appendChild(card);
-            });
+            const tasks = data.value || [];
+            const isFirst = Object.keys(prevTaskMap).length === 0;
+            if (isFirst) {
+                const sorted = [...tasks].sort((a, b) => {
+                    const d = statusGroup(a.status) - statusGroup(b.status);
+                    return d !== 0 ? d : (a.createdAt || "").localeCompare(b.createdAt || "");
+                });
+                buildDOM(sorted);
+                const nextMap = {};
+                tasks.forEach(t => nextMap[t.ID] = t.status);
+                prevTaskMap = nextMap;
+                document.getElementById("statActive").textContent = tasks.filter(t => isActive(t.status)).length;
+                document.getElementById("statReady").textContent  = tasks.filter(t => t.status?.toLowerCase().includes("ready for pick")).length;
+                document.getElementById("statEmpty").textContent  = tasks.filter(t => isBinEmpty(t.status)).length;
+                document.getElementById("statDone").textContent   = tasks.filter(t => isComplete(t.status)).length;
+                document.getElementById("statTotal").textContent  = tasks.length;
+                document.getElementById("lastUpdated").textContent = "Updated " + new Date().toLocaleTimeString();
+            } else {
+                diffAndUpdate(tasks);
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            if (Object.keys(prevTaskMap).length === 0)
+                document.getElementById("root").innerHTML = '<div class="empty">⚠ Failed to load orders. Check connection.</div>';
         });
 }
 
-// 🎯 Move Temi (Manual only)
-function move(bin, id) {
-
-    taskStatusMap[id] = "MOVING";
-    loadTasks();
-
-    fetch(`http://${TEMI_IP}:8080/move?bin=${bin}&id=${id}`)
-        .then(res => res.text())
-        .then(() => {
-
-            console.log("Command sent");
-
-        })
-        .catch(err => alert(err));
+function resetCountdown() {
+    clearInterval(countdownTimer);
+    clearTimeout(pollTimer);
+    secondsLeft = POLL_INTERVAL / 1000;
+    document.getElementById("countdown").textContent = `next in ${secondsLeft}s`;
+    countdownTimer = setInterval(() => {
+        secondsLeft--;
+        if (secondsLeft <= 0) {
+            clearInterval(countdownTimer);
+            document.getElementById("countdown").textContent = "refreshing…";
+        } else {
+            document.getElementById("countdown").textContent = `next in ${secondsLeft}s`;
+        }
+    }, 1000);
+    pollTimer = setTimeout(() => { fetchAndDiff(); schedulePoll(); }, POLL_INTERVAL);
 }
 
-// 🎨 Status color
-function getClass(status) {
-    status = status.toLowerCase();
+function schedulePoll() { resetCountdown(); }
 
-    if (status.includes("ready")) return "ready";
-    if (status.includes("moving")) return "moving";
-    if (status.includes("complete")) return "completed";
-    return "failed";
-}
-
-// 🔄 Auto refresh
-setInterval(loadTasks, 5000);
-
-// initial load
-loadTasks();
-
+fetchAndDiff();
+schedulePoll();
 </script>
-
 </body>
 </html>
